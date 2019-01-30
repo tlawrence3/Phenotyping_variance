@@ -1,0 +1,86 @@
+---
+title: "Phenotyping Variance"
+author: "Travis J. Lawrence"
+date: "1/29/2019"
+output:
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(reshape2)
+library(ggplot2)
+library(captioner)
+library(knitr)
+fig_nums <- captioner(prefix = "Fig.")
+fig.1_cap <- fig_nums(name = "fig_1", 
+                      caption = "Percent deviation of measured area (cm^2) by well and image analysis protocol")
+fig.2_cap <- fig_nums(name = "fig_2", 
+                        caption = "Plot of plant surface area measures by plate well and image analysis algorithm. Lower and upper of each box correspond to the first and third quartiles. Error bars indicate either the full range of the data or 1.5 * IQR, whichever is smaller. Dots represent the measured plant surface area.")
+table_nums <- captioner(prefix = "Table")
+tab.1_cap <- table_nums(name = "Table_1", 
+                        caption = "Linear model of percent deviation with wells and protocol as factors")
+```
+
+# Overview
+Below are the results from the reproducible of phenotype measurements study that Sara performed. She repeated phenotypic measurements of the same plate 12 times. Time between measurements was equal to the time to dark adapt plants. The photos were analyzed for the variance in the measurement of plant surface area across time points using three different algorithms referred to as edge.test, edgeerode.test, localfilter.test, and test. Each algorithm was implemented in Fiji and briefly described below:
+
+* edge.test:
+    + Convert picture to 8-bit
+    + Use the `find edges` algorithm
+    + Convert picture to binary
+    + Use the `fill holes` algorithm
+    + Take measurements
+* edgeerode.test:
+    + Run the first four steps of `edge.test`
+    + Use the `erode` function
+    + Use the `dilate` function
+    + Take measurements
+* localfilter.test:
+    + Convert picture to 8-bit
+    + Run `Auto Local Threshold` using the `method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white` options
+    + Convert picture to binary
+    + Take measurements
+* test:
+    + Adjust contrast using `setMinAndMax(2, 130);`. These values were determined by manually optimizing contrast for three photos.
+    + Convert picture to binary
+    + Take measurements
+
+# Analyses
+Percent deviation was calculated for each well and algorithm using the code below and plotted in Fig. 1. The overall distribution of the data for each well and algorithm is plotted in Fig. 2.
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+data <- read_csv("error.variance.csv")
+data.persd <- as.data.frame(dcast(data, Protocol~Well,
+                                  fun.aggregate = function(x){return(sprintf('%0.2f', sd(x)/mean(x)*100))}))
+data.persd <- melt(data.persd, id = c("Protocol"), variable.name = "Well")                            
+data.persd$value <- as.double(data.persd$value)
+```
+
+```{r, echo=FALSE, fig.width = 15, fig.align='center',fig.cap = fig.1_cap}
+ggplot(data.persd, aes(fill=Protocol, y=value, x=Well)) + 
+  geom_bar(position="dodge", stat="identity") + ylab("Percent Deviation")+
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16,face="bold"),
+        legend.text=element_text(size=16))
+```
+```{r, echo=FALSE, fig.width = 15, fig.align='center',fig.cap = fig.2_cap}
+data$Well<-as.factor(data$Well)
+ggplot(data, aes(color=Protocol, y=`Area(cm2)`, x=Well)) +
+  geom_boxplot(position=position_dodge(0.8)) +
+  geom_jitter(position=position_dodge(0.8)) +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16,face="bold"),
+        legend.text=element_text(size=16))
+
+
+```
+
+`r table_nums("Table_1")`
+```{r Table_1, echo=FALSE, fig.cap = tab.1_cap}
+kable(summary(lm(data.persd$value~data.persd$Well + data.persd$Protocol))$coef, digits=2)
+```
