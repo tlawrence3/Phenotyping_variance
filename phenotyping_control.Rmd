@@ -84,3 +84,101 @@ ggplot(data, aes(color=Protocol, y=`Area(cm2)`, x=Well)) +
 ```{r Table_1, echo=FALSE, fig.cap = tab.1_cap}
 kable(summary(lm(data.persd$value~data.persd$Well + data.persd$Protocol))$coef, digits=2)
 ```
+
+
+Time to play around with a simulation dataset. What is the minimum slope value necessary to be 95% confident that growth indeed occured. In other words, what is the slope value that we need to be above the noise. 
+
+
+
+```{r, echo=FALSE}
+#getting to know the data
+
+#data %>% select(Protocol) %>% unique() # from that we find localfilter.test
+
+#find the mean and sd for localfilter.test regardless of well position or rep.
+
+data %>% filter(Protocol == "localfilter.test") %>% summarise(mean_area = mean(`Area(cm2)`), SD_area = sd(`Area(cm2)`))
+
+
+```
+
+Ok - try the same thing but within well
+
+```{r}
+
+data %>% filter(Protocol == "localfilter.test") %>% group_by(Well)  %>% summarise(mean_area = mean(`Area(cm2)`), SD_area = sd(`Area(cm2)`))
+
+
+```
+
+Is there a relationship between SD and size?
+
+```{r}
+trash<-data %>% filter(Protocol == "localfilter.test") %>% group_by(Well)  %>% summarise(mean_area = mean(`Area(cm2)`), SD_area = sd(`Area(cm2)`))
+
+plot(trash$mean_area, trash$SD_area)
+
+```
+
+Not sure what to make of that. above 0.35 mean area is associated with large SD. whats up? so not going to use the average sd and mean from above. looking at this, anything below 0.35 cm2 area would have  a max sd of 0.06 or so. will go with that, and a mean of 0.25 area. 
+
+```{r}
+
+n<-length
+
+sim.data <- data.frame(
+  genotype = seq(1,100000),
+  week1 = rnorm(100000, 0.25, 0.06),
+  week2 = rnorm(100000, 0.25, 0.06),
+  week3 = rnorm(100000, 0.25, 0.06),
+  week4 = rnorm(100000, 0.25, 0.06) 
+)
+
+sim.data$genotype<-as.character(sim.data$genotype)
+#check with str(sim.data)
+
+```
+
+
+siumulated data is made. now run the model across 1000,000 rows of data. 
+
+```{r}
+library(broom)
+library(tidyr)
+
+#to tidy the data in long form
+tidy.sim.data <- gather(sim.data, weeksampled, area_cm2, -genotype)
+
+#changing the categorical 'initial', 'week1' etc to numeric days for lm
+tidy.sim.data.2<- tidy.sim.data %>% mutate(sampletime = replace(weeksampled, weeksampled == "week1", 0)) %>%  mutate(sampletime = replace(sampletime, weeksampled == "week2", 7)) %>% mutate(sampletime = replace(sampletime, weeksampled  == "week3", 14)) %>% mutate(sampletime = replace(sampletime, weeksampled == "week4", 21))
+
+tidy.sim.data.2$sampletime<-as.numeric(tidy.sim.data.2$sampletime)
+
+
+#running the lm model across all rows, genotypes
+lm.results<- tidy.sim.data.2 %>% group_by(genotype) %>% do(fitdata = lm(area_cm2 ~ sampletime, data = .))
+
+#getting tidy data output from model run
+lmSlopePvalue <- tidy(lm.results, fitdata) %>% select(genotype, term, estimate, p.value) %>% filter(term =="sampletime")
+
+lmRsquare <- glance(lm.results, fitdata) %>% select(genotype, r.squared)
+
+#tidy data output
+lmtidyoutput<-left_join(lmSlopePvalue, lmRsquare, by = c("genotype" = "genotype")) %>% arrange(p.value)
+
+# lm model parameter distributions
+
+par(mfrow=c(1,3))
+hist(lmtidyoutput$estimate, main = "lm slope")
+hist(lmtidyoutput$p.value, main = "P value")
+hist(lmtidyoutput$r.squared, main = "r2")
+```
+
+
+Need to translate this into a 95% CI
+
+
+
+
+
+
