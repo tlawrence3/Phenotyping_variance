@@ -177,6 +177,30 @@ hist(lmtidyoutput$r.squared, main = "r2")
 
 Need to translate this into a 95% CI
 
+THe graph from the lm slope looks normally distributed. so will calculate the 95% CI for that distribution
+
+```{r}
+
+#need to find mean, sd, and n
+
+mean(lmtidyoutput$estimate)
+sd(lmtidyoutput$estimate)
+
+
+n <- 100000
+m <- -2.656641e-05
+s <- 0.003832171
+
+error <- qnorm(0.975)*s/sqrt(n)
+left_interval <- m - error
+right_interval <- m + error
+
+left_interval
+right_interval
+
+```
+
+the above gives you 95% CI for that distribution, the problem will be translating that to variable starting size of the QTL population.
 
 
 
